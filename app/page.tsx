@@ -87,37 +87,38 @@ export default function DailyAgenda() {
         <AgendaSection 
           title="Lesson Objective" 
           value={agenda.objective} 
-          onChange={(v) => setAgenda({...agenda, objective: v})} 
+          onChange={(v: string) => setAgenda({...agenda, objective: v})} 
           aiPrompt="Create a learning objective for a lesson about..."
         />
         <AgendaSection 
           title="Bell Ringer" 
           value={agenda.bellRinger} 
-          onChange={(v) => setAgenda({...agenda, bellRinger: v})} 
+          onChange={(v: string) => setAgenda({...agenda, bellRinger: v})} 
           aiPrompt="Create an engaging warm-up question for..."
         />
         <AgendaSection 
           title="Mini-Lecture" 
           value={agenda.miniLecture} 
-          onChange={(v) => setAgenda({...agenda, miniLecture: v})} 
+          onChange={(v: string) => setAgenda({...agenda, miniLecture: v})} 
           aiPrompt="Summarize 3 key teaching points for..."
         />
         <AgendaSection 
           title="Guided Discussion" 
           value={agenda.discussion} 
-          onChange={(v) => setAgenda({...agenda, discussion: v})} 
+          onChange={(v: string) => setAgenda({...agenda, discussion: v})} 
           aiPrompt="Generate 3 deep discussion questions about..."
         />
         <AgendaSection 
           title="Activity" 
           value={agenda.activity} 
-          onChange={(v) => setAgenda({...agenda, activity: v})} 
+          onChange={(v: string) => setAgenda({...agenda, activity: v})} 
           aiPrompt="Outline a hands-on activity for..."
         />
         <AgendaSection 
           title="Independent Work" 
           value={agenda.independentWork} 
-          onChange={(v) => setAgenda({...agenda, independentWork: v})} 
+          onChange={(v: string) => setAgenda({...agenda, independentWork: v})}
+// ...existing code...
           aiPrompt="Suggest an exit ticket task for..."
         />
       </div>
