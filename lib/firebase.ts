@@ -28,4 +28,5 @@ provider.addScope('https://www.googleapis.com/auth/classroom.courses.readonly');
 provider.addScope('https://www.googleapis.com/auth/classroom.announcements');
 provider.addScope('https://www.googleapis.com/auth/classroom.coursework.me.readonly');
 
+
 export { db, auth, provider, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider };
