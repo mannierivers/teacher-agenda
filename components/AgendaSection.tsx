@@ -38,7 +38,7 @@ export default function AgendaSection({ title, value, onChange, aiPrompt }: any)
         </button>
       </div>
       <textarea
-        className="flex-1 bg-transparent border-none outline-none resize-none text-xl leading-relaxed placeholder:text-slate-700"
+        className="flex-1 h-full bg-transparent border-none outline-none resize-none text-xl leading-relaxed placeholder:text-slate-700"
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder="Start typing..."
