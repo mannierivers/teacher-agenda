@@ -1,281 +1,258 @@
 'use client';
 
-/** 
- * SECTION 1: IMPORTS
- */
 import { useState, useEffect, useRef } from 'react';
-import { db, auth, provider, signInWithPopup, signOut, GoogleAuthProvider } from '@/lib/firebase';
-import { onAuthStateChanged, User } from 'firebase/auth';
+import { auth, provider, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider } from '@/lib/firebase';
+import { User } from 'firebase/auth';
 import { agendaService } from '@/lib/firestore-service';
+import { THEMES } from '@/lib/themes';
 import { 
   ChevronLeft, ChevronRight, Share2, LogOut, 
-  Calendar as CalendarIcon, Loader2, Maximize2, Columns, 
-  GraduationCap, Send, CheckCircle2
+  Calendar as CalendarIcon, Loader2, GraduationCap, 
+  Palette, Columns, Maximize2, Send, CheckCircle2 
 } from 'lucide-react';
 import AgendaSection from '@/components/AgendaSection';
 import TabNavigation from '@/components/TabNavigation';
 
-export default function DailyAgendaDashboard() {
-  /** 
-   * SECTION 2: STATE & REFS
-   */
+export default function LancerDashboard() {
+  // 1. STATE & REFS
   const [user, setUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [accessToken, setAccessToken] = useState<string | null>(null);
-  
+  const [theme, setTheme] = useState(THEMES.standard);
+  const [isSaving, setIsSaving] = useState(false);
   const dateInputRef = useRef<HTMLInputElement>(null);
+
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [currentClass, setCurrentClass] = useState('p1');
-  const [isSaving, setIsSaving] = useState(false);
-
-  const [agenda, setAgenda] = useState({
-    objective: '', bellRinger: '', miniLecture: '', 
-    discussion: '', activity: '', independentWork: ''
-  });
-
-  const [layout, setLayout] = useState({
-    col1: 1, col2: 1, col3: 1,
-    row1: 1, row2: 1
+  const [layout, setLayout] = useState({ col1: 1, col2: 1, col3: 1, row1: 1, row2: 1 });
+  
+  // Lesson Agenda State
+  const [agenda, setAgenda] = useState<any>({
+    objective: { text: '', media: null },
+    bellRinger: { text: '', media: null },
+    miniLecture: { text: '', media: null },
+    discussion: { text: '', media: null },
+    activity: { text: '', media: null },
+    independentWork: { text: '', media: null }
   });
 
   // Google Classroom State
   const [courses, setCourses] = useState<any[]>([]);
   const [showClassroomModal, setShowClassroomModal] = useState(false);
-  const [isPosting, setIsPosting] = useState(false);
 
-  /** 
-   * SECTION 3: AUTH & GOOGLE CLASSROOM LOGIC
-   */
+  // 2. AUTHENTICATION
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
       setAuthLoading(false);
-      // Retrieve token from session if it exists
-      const savedToken = sessionStorage.getItem('gc_token');
-      if (savedToken) setAccessToken(savedToken);
     });
     return () => unsubscribe();
   }, []);
 
-  const handleLogin = async () => {
-    try {
-      const result = await signInWithPopup(auth, provider);
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-      const token = credential?.accessToken;
-      
-      if (token) {
-        setAccessToken(token);
-        sessionStorage.setItem('gc_token', token);
-      }
-
-      const email = result.user.email || "";
-      if (/\d/.test(email.split('@')[0])) {
-        await signOut(auth);
-        alert("Teacher accounts only.");
-      }
-    } catch (error) {
-      console.error(error);
-    }
-  };
-
-  const fetchClassroomCourses = async () => {
-    if (!accessToken) return;
-    setShowClassroomModal(true);
-    try {
-      const response = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE', {
-        headers: { 'Authorization': `Bearer ${accessToken}` }
-      });
-      const data = await response.json();
-      setCourses(data.courses || []);
-    } catch (error) {
-      alert("Failed to fetch Google Courses.");
-    }
-  };
-
-  const postToClassroom = async (courseId: string) => {
-    setIsPosting(true);
-    const shareLink = `${window.location.origin}/share/${user?.uid}/${currentClass}/${date}`;
-    
-    try {
-      const response = await fetch(`https://classroom.googleapis.com/v1/courses/${courseId}/announcements`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text: `Today's Agenda (${new Date(date).toLocaleDateString()}): ${agenda.objective}`,
-          materials: [{ link: { url: shareLink } }],
-          state: "PUBLISHED"
-        }),
-      });
-
-      if (response.ok) {
-        alert("Agenda posted to Classroom Stream!");
-        setShowClassroomModal(false);
-      }
-    } catch (error) {
-      alert("Error posting to Classroom.");
-    } finally {
-      setIsPosting(false);
-    }
-  };
-
-  /** 
-   * SECTION 4: DATA PERSISTENCE & HELPERS
-   */
+  // 3. LOAD DATA (With Legacy Fallback)
   useEffect(() => {
     if (!user) return;
-    const loadData = async () => {
+    const load = async () => {
       const data = await agendaService.getAgenda(user.uid, date, currentClass);
       if (data) {
-        setAgenda(data as any);
+        // If 'content' exists, use it. Otherwise, assume flat structure (legacy)
+        const savedContent = data.content || data;
+        
+        setAgenda({
+          objective: savedContent.objective || { text: '', media: null },
+          bellRinger: savedContent.bellRinger || { text: '', media: null },
+          miniLecture: savedContent.miniLecture || { text: '', media: null },
+          discussion: savedContent.discussion || { text: '', media: null },
+          activity: savedContent.activity || { text: '', media: null },
+          independentWork: savedContent.independentWork || { text: '', media: null }
+        });
+
         if (data.layout) setLayout(data.layout);
+        if (data.themeId && THEMES[data.themeId]) setTheme(THEMES[data.themeId]);
       } else {
-        setAgenda({ objective: '', bellRinger: '', miniLecture: '', discussion: '', activity: '', independentWork: '' });
+        // Reset for empty days
+        setAgenda({
+          objective: { text: '', media: null }, bellRinger: { text: '', media: null },
+          miniLecture: { text: '', media: null }, discussion: { text: '', media: null },
+          activity: { text: '', media: null }, independentWork: { text: '', media: null }
+        });
       }
     };
-    loadData();
+    load();
   }, [user, date, currentClass]);
 
+  // 4. AUTOSAVE (Separated Content/Metadata)
   useEffect(() => {
     if (!user || authLoading) return;
     const timer = setTimeout(async () => {
       setIsSaving(true);
-      await agendaService.saveAgenda(user.uid, date, currentClass, { ...agenda, layout });
+      await agendaService.saveAgenda(user.uid, date, currentClass, { 
+        agenda, 
+        layout, 
+        themeId: theme.id 
+      });
       setIsSaving(false);
     }, 1500);
     return () => clearTimeout(timer);
-  }, [agenda, layout, date, currentClass]);
+  }, [agenda, layout, theme, date, currentClass]);
 
-  const changeDate = (days: number) => {
-    const d = new Date(date + 'T00:00:00');
-    d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
-  };
-
-  const adjustLayout = (dim: string, amount: number) => {
-    setLayout(prev => ({ ...prev, [dim]: Math.max(0.5, Math.min(3, (prev as any)[dim] + amount)) }));
-  };
-
-  /** 
-   * SECTION 5: RENDER
-   */
-  if (authLoading) return <div className="h-screen bg-slate-950 flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" size={48} /></div>;
+  // 5. RENDER HELPERS
+  if (authLoading) return <div className="h-screen bg-[#8a2529] flex items-center justify-center"><Loader2 className="animate-spin text-white" /></div>;
 
   if (!user) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-slate-950 text-white p-12 text-center">
-      <h1 className="text-7xl font-black mb-6 tracking-tighter text-blue-500">AGENDA.OS</h1>
-      <button onClick={handleLogin} className="px-12 py-6 bg-white text-black rounded-3xl font-bold text-2xl hover:scale-105 transition-all shadow-2xl">
-        Sign in with Google
+    <div className="h-screen flex flex-col items-center justify-center bg-[#8a2529] font-serif text-white">
+      <img src="/lancer-seal.png" className="w-40 mb-8 drop-shadow-2xl" alt="Lancer Logo" />
+      <h1 className="text-6xl font-black italic tracking-tighter mb-6">Lancer Agenda.OS</h1>
+      <button onClick={async () => {
+        const result = await signInWithPopup(auth, provider);
+        const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+        if (token) sessionStorage.setItem('gc_token', token);
+      }} className="px-10 py-5 bg-[#FCD450] text-[#8a2529] rounded-2xl font-bold text-xl hover:scale-105 transition shadow-2xl">
+        Teacher Sign-In
       </button>
     </div>
   );
 
   return (
-    <div className="flex flex-col h-full gap-4 overflow-hidden select-none relative">
+    <div className={`h-screen w-screen flex flex-col p-4 transition-colors duration-1000 overflow-hidden ${theme.bg}`}>
       
-      {/* HEADER BAR */}
-      <header className="flex items-center justify-between bg-slate-900/80 backdrop-blur-xl p-4 rounded-[2rem] border border-slate-800 shadow-2xl">
+      {/* HEADER: CONSOLIDATED COMMAND CENTER */}
+      <header className="flex items-center justify-between bg-black/30 backdrop-blur-2xl p-3 rounded-[2.2rem] border border-white/10 shadow-2xl mb-4">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1 bg-slate-950 rounded-2xl p-1 border border-slate-800">
-            <button onClick={() => changeDate(-1)} className="p-2 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white"><ChevronLeft size={24}/></button>
-            <div onClick={() => dateInputRef.current?.showPicker()} className="flex items-center px-4 py-2 cursor-pointer hover:bg-slate-900 rounded-xl transition min-w-[180px] justify-center">
-              <CalendarIcon size={18} className="text-blue-500 mr-3" />
-              <span className="text-lg font-bold text-slate-200">{new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-              <input ref={dateInputRef} type="date" className="absolute invisible w-0 h-0" value={date} onChange={(e) => setDate(e.target.value)} />
+          <img src={theme.logo} className="h-10 w-auto" alt="Logo" />
+          <div className="flex items-center bg-black/40 rounded-2xl p-1 border border-white/5">
+            <button onClick={() => {
+              const d = new Date(date + 'T00:00:00');
+              d.setDate(d.getDate() - 1);
+              setDate(d.toISOString().split('T')[0]);
+            }} className="p-2 text-white/40 hover:text-white"><ChevronLeft size={22}/></button>
+            <div onClick={() => dateInputRef.current?.showPicker()} className="px-4 cursor-pointer font-black text-sm text-white min-w-[120px] text-center">
+               {new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+               <input ref={dateInputRef} type="date" className="absolute invisible w-0 h-0" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
-            <button onClick={() => changeDate(1)} className="p-2 hover:bg-slate-800 rounded-xl transition text-slate-400 hover:text-white"><ChevronRight size={24}/></button>
+            <button onClick={() => {
+              const d = new Date(date + 'T00:00:00');
+              d.setDate(d.getDate() + 1);
+              setDate(d.toISOString().split('T')[0]);
+            }} className="p-2 text-white/40 hover:text-white"><ChevronRight size={22}/></button>
           </div>
+        </div>
+
+        <div className="flex-1 px-10">
           <TabNavigation currentClass={currentClass} setClass={setCurrentClass} />
         </div>
 
-        <div className="flex items-center gap-4">
-          {/* GOOGLE CLASSROOM BUTTON */}
-          <button 
-            onClick={fetchClassroomCourses}
-            className="flex items-center gap-2 px-6 py-3 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 rounded-xl hover:bg-emerald-600 hover:text-white transition font-black text-xs"
-          >
-            <GraduationCap size={18}/> GOOGLE CLASSROOM
+        <div className="flex items-center gap-2">
+          <div className="mr-3 flex items-center gap-2 px-4 py-2 bg-black/30 rounded-xl border border-white/5">
+            <div className={`h-2.5 w-2.5 rounded-full ${isSaving ? 'bg-amber-500 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'}`} />
+            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest">{isSaving ? 'Saving' : 'Synced'}</span>
+          </div>
+
+          <button onClick={async () => {
+             const token = sessionStorage.getItem('gc_token');
+             const res = await fetch('https://classroom.googleapis.com/v1/courses?courseStates=ACTIVE', {
+               headers: { 'Authorization': `Bearer ${token}` }
+             });
+             const d = await res.json();
+             setCourses(d.courses || []);
+             setShowClassroomModal(true);
+          }} className="p-3 bg-white/5 text-white/80 hover:bg-emerald-600 hover:text-white rounded-xl transition border border-white/5" title="Google Classroom">
+            <GraduationCap size={22}/>
           </button>
-          
+
+          <div className="relative group">
+            <button className="p-3 bg-white/5 text-white/80 hover:bg-white/20 rounded-xl transition border border-white/5">
+              <Palette size={22} />
+            </button>
+            <div className="absolute right-0 top-14 hidden group-hover:grid grid-cols-2 bg-slate-900 border border-slate-800 p-2 rounded-2xl shadow-2xl z-50 w-80 gap-1 overflow-hidden">
+              {Object.values(THEMES).map((t: any) => (
+                <button key={t.id} onClick={() => setTheme(t)} className="text-left px-3 py-2.5 hover:bg-white/10 rounded-xl text-[10px] font-black uppercase tracking-wider text-white flex justify-between items-center transition">
+                  {t.name}
+                  <div className={`h-2 w-2 rounded-full ${t.accent.replace('border-', 'bg-')}`} />
+                </button>
+              ))}
+            </div>
+          </div>
+
           <button onClick={() => {
-            const url = `${window.location.origin}/share/${user.uid}/${currentClass}/${date}`;
-            navigator.clipboard.writeText(url);
-            alert("Share Link Copied!");
-          }} className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition font-black text-xs">
-            <Share2 size={18}/> SHARE LINK
-          </button>
-          
-          <button onClick={() => signOut(auth)} className="p-3 text-slate-500 hover:text-red-400 transition"><LogOut size={24}/></button>
+             const url = `${window.location.origin}/share/${user.uid}/${currentClass}/${date}`;
+             navigator.clipboard.writeText(url);
+             alert("Lancer Link Copied!");
+          }} className="p-3 bg-[#FCD450] text-[#8a2529] rounded-xl hover:scale-105 transition shadow-lg"><Share2 size={22}/></button>
+          <button onClick={() => signOut(auth)} className="ml-2 p-3 text-white/20 hover:text-red-400 transition"><LogOut size={22}/></button>
         </div>
       </header>
 
-      {/* DYNAMIC GRID */}
-      <main className="flex-1 grid gap-4 transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)]"
+      {/* THE 6-GRID: Strictly mapping lesson keys only */}
+      <main 
+        className="flex-1 grid gap-4 transition-all duration-700 ease-in-out"
         style={{
           gridTemplateColumns: `${layout.col1}fr ${layout.col2}fr ${layout.col3}fr`,
           gridTemplateRows: `${layout.row1}fr ${layout.row2}fr`
-        }}>
-        <AgendaSection title="Lesson Objective" value={agenda.objective} onChange={(v:string) => setAgenda({...agenda, objective: v})} aiPrompt="Create a SWBAT objective for..." />
-        <AgendaSection title="Bell Ringer" value={agenda.bellRinger} onChange={(v:string) => setAgenda({...agenda, bellRinger: v})} aiPrompt="Create a warm-up for..." />
-        <AgendaSection title="Mini-Lecture" value={agenda.miniLecture} onChange={(v:string) => setAgenda({...agenda, miniLecture: v})} aiPrompt="Key points for..." />
-        <AgendaSection title="Guided Discussion" value={agenda.discussion} onChange={(v:string) => setAgenda({...agenda, discussion: v})} aiPrompt="Discussion questions for..." />
-        <AgendaSection title="Activity" value={agenda.activity} onChange={(v:string) => setAgenda({...agenda, activity: v})} aiPrompt="Classroom activity for..." />
-        <AgendaSection title="Independent Work" value={agenda.independentWork} onChange={(v:string) => setAgenda({...agenda, independentWork: v})} aiPrompt="Practice task for..." />
+        }}
+      >
+        {['objective', 'bellRinger', 'miniLecture', 'discussion', 'activity', 'independentWork'].map((key) => (
+          <AgendaSection 
+            key={key}
+            title={key.replace(/([A-Z])/g, ' $1').trim()}
+            data={agenda[key]}
+            theme={theme}
+            onChange={(newData: any) => setAgenda({ ...agenda, [key]: newData })}
+            aiPrompt={`Suggest a ${key} for a lesson about...`}
+          />
+        ))}
       </main>
 
-      {/* CLASSROOM SELECTOR MODAL */}
+      {/* FOOTER */}
+      <footer className="mt-4 flex justify-between items-center px-6 py-2 bg-black/10 rounded-2xl border border-white/5 text-[10px] uppercase tracking-[0.3em] font-bold text-white/20">
+        <div className="flex gap-8">
+           <div className="flex gap-2 items-center">
+             <span className="opacity-40 flex items-center gap-1"><Columns size={12}/> COLS:</span>
+             {[1,2,3].map(n => (
+               <button key={n} onClick={() => setLayout({...layout, [`col${n}`]: Math.max(0.5, (layout as any)[`col${n}`] + 0.1)})} className="hover:text-white transition">GROW {n}</button>
+             ))}
+           </div>
+           <div className="flex gap-2 items-center">
+             <span className="opacity-40 flex items-center gap-1"><Maximize2 size={12}/> ROWS:</span>
+             {[1,2].map(n => (
+               <button key={n} onClick={() => setLayout({...layout, [`row${n}`]: Math.max(0.5, (layout as any)[`row${n}`] + 0.1)})} className="hover:text-white transition">GROW {n}</button>
+             ))}
+           </div>
+        </div>
+        <span>Salpointe Catholic High School • Establishing Excellence Since 1950</span>
+      </footer>
+
+      {/* MODAL: GOOGLE CLASSROOM */}
       {showClassroomModal && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-6">
-          <div className="bg-slate-900 border border-slate-800 w-full max-w-lg rounded-[2rem] p-8 shadow-2xl">
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                  <GraduationCap className="text-emerald-400" /> Select Course
-                </h2>
-                <p className="text-slate-400 text-sm">Which Google Classroom should receive this agenda link?</p>
-              </div>
-              <button onClick={() => setShowClassroomModal(false)} className="text-slate-500 hover:text-white font-bold">CANCEL</button>
-            </div>
-            
-            <div className="max-h-96 overflow-y-auto pr-2 custom-scrollbar space-y-2">
-              {courses.length > 0 ? courses.map((course) => (
-                <button 
-                  key={course.id}
-                  onClick={() => postToClassroom(course.id)}
-                  disabled={isPosting}
-                  className="w-full flex items-center justify-between p-4 bg-slate-800 hover:bg-emerald-600/20 border border-slate-700 hover:border-emerald-500 transition rounded-2xl group text-left"
-                >
-                  <span className="font-bold text-slate-200 group-hover:text-white">{course.name}</span>
-                  <Send size={18} className="text-slate-500 group-hover:text-emerald-400" />
-                </button>
-              )) : <div className="text-center py-8 text-slate-500 italic">No active courses found.</div>}
-            </div>
-            
-            {isPosting && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-emerald-400 font-bold animate-pulse">
-                <Loader2 className="animate-spin" size={16} /> POSTING TO CLASSROOM...
-              </div>
-            )}
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-6 text-white">
+          <div className="bg-[#1a1a1a] border border-white/10 w-full max-w-md rounded-[3rem] p-8 shadow-2xl flex flex-col max-h-[85vh]">
+             <div className="flex justify-between items-center mb-6 px-2">
+               <h2 className="text-xl font-black italic tracking-tighter">Post to Classroom</h2>
+               <button onClick={() => setShowClassroomModal(false)} className="text-white/20 hover:text-white text-xs font-bold uppercase">Close</button>
+             </div>
+             <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar">
+               {courses.map(course => (
+                 <button key={course.id} onClick={async () => {
+                    const token = sessionStorage.getItem('gc_token');
+                    await fetch(`https://classroom.googleapis.com/v1/courses/${course.id}/announcements`, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        text: `Agenda for ${new Date(date).toLocaleDateString()}: ${agenda.objective.text}`,
+                        materials: [{ link: { url: `${window.location.origin}/share/${user.uid}/${currentClass}/${date}` } }],
+                        state: "PUBLISHED"
+                      }),
+                    });
+                    setShowClassroomModal(false);
+                    alert("Posted!");
+                 }} className="w-full flex justify-between items-center p-5 bg-white/5 hover:bg-emerald-600/20 border border-white/5 rounded-2xl transition group text-left">
+                   <span className="font-bold text-white group-hover:text-emerald-400 truncate mr-4">{course.name}</span>
+                   <Send size={18} className="text-white/20 group-hover:text-emerald-400" />
+                 </button>
+               ))}
+             </div>
           </div>
         </div>
       )}
-
-      {/* FOOTER */}
-      <footer className="flex justify-between items-center px-6 py-2 bg-slate-900/40 rounded-3xl border border-slate-800/50">
-        <div className="flex items-center gap-6">
-          <div className="flex gap-1.5 items-center">
-            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mr-2">Grid:</span>
-            {[1,2,3].map(n => (
-              <button key={n} onClick={() => adjustLayout(`col${n}`, 0.1)} className="px-3 py-1 bg-slate-800 border border-slate-700 rounded-lg text-[10px] text-slate-400 hover:bg-slate-700">+ COL {n}</button>
-            ))}
-          </div>
-        </div>
-        <div className="text-[10px] font-mono text-slate-500 uppercase flex items-center gap-2 tracking-widest">
-           {isSaving ? <><Loader2 size={10} className="animate-spin"/> SYNCING</> : <><CheckCircle2 size={10} className="text-emerald-500"/> ALL CHANGES SECURED</>}
-        </div>
-      </footer>
     </div>
   );
 }

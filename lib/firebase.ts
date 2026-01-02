@@ -22,17 +22,10 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-// Configure Google Provider with Classroom Scopes
+// Configure Google Auth with Classroom Scopes
 const provider = new GoogleAuthProvider();
-
-// Scope to see classes
 provider.addScope('https://www.googleapis.com/auth/classroom.courses.readonly');
-// Scope to post announcements
 provider.addScope('https://www.googleapis.com/auth/classroom.announcements');
-
-// Force consent to ensure we get the access token every time
-provider.setCustomParameters({
-  prompt: 'consent'
-});
+provider.addScope('https://www.googleapis.com/auth/classroom.coursework.me.readonly');
 
 export { db, auth, provider, signInWithPopup, signOut, onAuthStateChanged, GoogleAuthProvider };
