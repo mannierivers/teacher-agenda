@@ -5,99 +5,25 @@
 :root {
   --lancer-maroon: #8a2529;
   --lancer-gold: #FCD450;
-  --lancer-maroon-dark: #4b121e;
 }
 
-/* 1. NO-SCROLL CORE */
-html,
-body {
-  padding: 0;
-  margin: 0;
-  height: 100vh;
-  width: 100vw;
-  overflow: hidden; /* Hard enforcement of no-scroll */
+html, body {
+  padding: 0; margin: 0;
+  height: 100vh; width: 100vw;
+  overflow: hidden;
   background-color: #000;
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 2. CUSTOM SCROLLBARS FOR AGENDA BOXES */
-/* We want subtle scrollbars inside the lesson boxes if text gets too long */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 4px;
-}
+.prose { color: white; }
+.prose ul { list-style-type: disc !important; padding-left: 2rem !important; margin-top: 1rem !important; }
+.prose ol { list-style-type: decimal !important; padding-left: 2rem !important; margin-top: 1rem !important; }
+.prose li { margin-bottom: 0.5rem !important; }
+.prose strong { color: inherit !important; font-weight: 800 !important; }
 
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: transparent;
-}
+.custom-scrollbar::-webkit-scrollbar { width: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
 
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-}
-
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* 3. INPUT/TEXTAREA FIXES */
-textarea {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-
-/* Disable the blue focus ring globally for a cleaner look, 
-   we use our theme accent borders instead */
-*:focus {
-  outline: none !important;
-}
-
-/* 4. ANIMATIONS */
-@keyframes loading-bar {
-  0% { transform: translateX(-100%); }
-  50% { transform: translateX(0); }
-  100% { transform: translateX(100%); }
-}
-
-.animate-loading-bar {
-  animation: loading-bar 2s infinite linear;
-}
-
-/* Glassmorphism helpers */
-.glass {
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-}
-
-/* 5. TYPOGRAPHY FALLBACKS */
-/* If Adobe Garamond Pro isn't installed on the Chromebox, 
-   it will fall back to a high-quality serif */
-.font-serif {
-  font-family: "Adobe Garamond Pro", "Garamond", "Georgia", serif;
-}
-
-.font-sans {
-  font-family: "Acumin Pro", "Arial", "Helvetica Neue", sans-serif;
-}
-
-/* 6. PROMETHEAN BOARD TOUCH FIX */
-/* Prevents long-press "right click" menus from appearing on touch */
-.select-none {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Allow text selection only inside agenda boxes so teachers can copy-paste */
-textarea, .selectable-text {
-  -webkit-user-select: text;
-  user-select: text;
-}
-
-/* 7. CALENDAR PICKER OVERRIDE */
-/* Makes the native calendar icon white so it's visible in dark themes */
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
-  cursor: pointer;
-}
+.select-none { -webkit-touch-callout: none; user-select: none; }
+input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }

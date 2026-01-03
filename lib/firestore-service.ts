@@ -1,9 +1,8 @@
 import { db } from './firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { ScheduleType } from '@/lib/schedule-utils';
 
 export const agendaService = {
-  // 1. Fetch Agenda with legacy fallback
+  // Fetch specific lesson agenda
   getAgenda: async (uid: string, date: string, classId: string) => {
     try {
       const docId = `${uid}_${date}_class_${classId}`;
@@ -14,30 +13,9 @@ export const agendaService = {
       return null;
     }
   },
-  saveTeacherSettings: async (uid: string, settings: any) => {
-  try {
-    const docRef = doc(db, "teacherSettings", uid);
-    await setDoc(docRef, settings, { merge: true });
-    return true;
-  } catch (error) {
-    console.error("Error saving teacher settings:", error);
-    return false;
-  }
-},
 
-// 2. Updated fetch to get all settings at once
-getTeacherSettings: async (uid: string) => {
-  try {
-    const docRef = doc(db, "teacherSettings", uid);
-    const snap = await getDoc(docRef);
-    return snap.exists() ? snap.data() : null;
-  } catch (error) {
-    return null;
-  }
-},
-
-  // 2. Save Agenda (Strictly separating Lesson Content from Metadata)
-  saveAgenda: async (uid: string, date: string, classId: string, data: { agenda: any; layout: any; themeId: string; scheduleType: ScheduleType }) => {
+  // Save lesson agenda with Metadata isolation
+  saveAgenda: async (uid: string, date: string, classId: string, payload: { agenda: any, layout: any, themeId: string, scheduleType: string }) => {
     try {
       const docId = `${uid}_${date}_class_${classId}`;
       const docRef = doc(db, "agendas", docId);
@@ -45,9 +23,10 @@ getTeacherSettings: async (uid: string) => {
         teacherId: uid,
         date: date,
         classId: classId,
-        themeId: data.themeId,
-        layout: data.layout,
-        content: data.agenda, // Nested lesson data
+        themeId: payload.themeId,
+        layout: payload.layout,
+        scheduleType: payload.scheduleType,
+        content: payload.agenda, 
         updatedAt: serverTimestamp(),
       }, { merge: true });
       return true;
@@ -56,25 +35,25 @@ getTeacherSettings: async (uid: string) => {
     }
   },
 
-  // 3. Save Teacher Classroom Mappings (e.g., P1 -> Science Course ID)
-  saveClassroomMappings: async (uid: string, mappings: any) => {
+  // Save Global Teacher Settings (Room #, Classroom Mappings, Section Names)
+  saveTeacherSettings: async (uid: string, settings: any) => {
     try {
       const docRef = doc(db, "teacherSettings", uid);
-      await setDoc(docRef, { classroomMappings: mappings }, { merge: true });
+      await setDoc(docRef, settings, { merge: true });
       return true;
     } catch (error) {
       return false;
     }
   },
 
-  // 4. Fetch Teacher Classroom Mappings
-  getClassroomMappings: async (uid: string) => {
+  // Retrieve Global Settings
+  getTeacherSettings: async (uid: string) => {
     try {
       const docRef = doc(db, "teacherSettings", uid);
       const snap = await getDoc(docRef);
-      return snap.exists() ? snap.data().classroomMappings : {};
+      return snap.exists() ? snap.data() : null;
     } catch (error) {
-      return {};
+      return null;
     }
   }
 };
