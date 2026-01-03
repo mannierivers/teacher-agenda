@@ -1,5 +1,6 @@
 import { db } from './firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { ScheduleType } from '@/lib/schedule-utils';
 
 export const agendaService = {
   // 1. Fetch Agenda with legacy fallback
@@ -36,7 +37,7 @@ getTeacherSettings: async (uid: string) => {
 },
 
   // 2. Save Agenda (Strictly separating Lesson Content from Metadata)
-  saveAgenda: async (uid: string, date: string, classId: string, payload: { agenda: any, layout: any, themeId: string }) => {
+  saveAgenda: async (uid: string, date: string, classId: string, data: { agenda: any; layout: any; themeId: string; scheduleType: ScheduleType }) => {
     try {
       const docId = `${uid}_${date}_class_${classId}`;
       const docRef = doc(db, "agendas", docId);
@@ -44,9 +45,9 @@ getTeacherSettings: async (uid: string) => {
         teacherId: uid,
         date: date,
         classId: classId,
-        themeId: payload.themeId,
-        layout: payload.layout,
-        content: payload.agenda, // Nested lesson data
+        themeId: data.themeId,
+        layout: data.layout,
+        content: data.agenda, // Nested lesson data
         updatedAt: serverTimestamp(),
       }, { merge: true });
       return true;

@@ -4,7 +4,7 @@ const CLASSES = [
   { id: 'p1', name: 'P1' }, { id: 'p2', name: 'P2' },
   { id: 'p3', name: 'P3' }, { id: 'p4', name: 'P4' },
   { id: 'p5', name: 'P5' }, { id: 'p6', name: 'P6' },
-  { id: 'p7', name: 'P7' }, { id: 'ap', name: 'AP' },
+  { id: 'p7', name: 'P7' }, { id: 'hr', name: 'HR' },
 ];
 
 export default function TabNavigation({ currentClass, setClass }: any) {

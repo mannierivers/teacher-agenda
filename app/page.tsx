@@ -32,13 +32,13 @@ export default function LancerDashboard() {
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const timerMenuRef = useRef<HTMLDivElement>(null);
 
-  // App Navigation
+  // App & Sidebar Toggle
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [currentClass, setCurrentClass] = useState('p1');
   const [layout, setLayout] = useState({ col1: 1, col2: 1, col3: 1, row1: 1, row2: 1 });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isScheduleSyncing, setIsScheduleSyncing] = useState(false);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
+  const [showClassroomModal, setShowClassroomModal] = useState(false);
 
   // Clock & Timer
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -47,10 +47,10 @@ export default function LancerDashboard() {
   const [isTimerMenuOpen, setIsTimerMenuOpen] = useState(false);
   const [customTimerMins, setCustomTimerMins] = useState("");
 
-  // Room & Schedule
+  // Room & Schedule (Manual Logic)
   const [roomNumber, setRoomNumber] = useState("");
   const [isRoomEditing, setIsRoomEditing] = useState(false);
-  const [scheduleType, setScheduleType] = useState<ScheduleType>('NONE');
+  const [scheduleType, setScheduleType] = useState<ScheduleType>('A');
   
   // Lesson Data
   const [agenda, setAgenda] = useState<any>({
@@ -62,15 +62,13 @@ export default function LancerDashboard() {
     independentWork: { text: '', media: null }
   });
 
-  // Modals & Classroom State
+  // AI & Classroom State
   const [aiModal, setAiModal] = useState({ isOpen: false, mode: 'bulk' as 'bulk' | 'single', sectionKey: '' });
   const [aiTopic, setAiTopic] = useState("");
   const [aiSubject, setAiSubject] = useState("General");
   const [isAiProcessing, setIsAiProcessing] = useState(false);
-  
   const [courses, setCourses] = useState<any[]>([]);
   const [mappings, setMappings] = useState<any>({});
-  const [showClassroomModal, setShowClassroomModal] = useState(false);
   const [isAssignPickerOpen, setIsAssignPickerOpen] = useState(false);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const [assignmentList, setAssignmentList] = useState<any[]>([]);
@@ -78,21 +76,10 @@ export default function LancerDashboard() {
   const [isClassroomLoading, setIsClassroomLoading] = useState(false);
 
   /** 
-   * MODULE 3: CORE HANDLERS
+   * MODULE 3: HANDLERS
    */
-
-  // Layout Management
   const adjustLayout = (dim: string, amount: number) => {
-    setLayout(prev => ({
-      ...prev,
-      [dim]: Math.max(0.5, Math.min(3, (prev as any)[dim] + amount))
-    }));
-  };
-
-  const changeDate = (days: number) => {
-    const d = new Date(date + 'T00:00:00'); 
-    d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
+    setLayout(prev => ({ ...prev, [dim]: Math.max(0.5, Math.min(3, (prev as any)[dim] + amount)) }));
   };
 
   const handleTimerAction = () => {
@@ -109,6 +96,12 @@ export default function LancerDashboard() {
     setIsTimerRunning(!isTimerRunning);
   };
 
+  const changeDate = (days: number) => {
+    const d = new Date(date + 'T00:00:00'); 
+    d.setDate(d.getDate() + days);
+    setDate(d.toISOString().split('T')[0]);
+  };
+
   const executeAIGeneration = async () => {
     if (!aiTopic.trim()) return;
     setIsAiProcessing(true);
@@ -120,6 +113,7 @@ export default function LancerDashboard() {
         body: JSON.stringify({ topic: aiTopic, isBulk, sectionTitle: aiModal.sectionKey, subject: aiSubject }),
       });
       const data = await res.json();
+
       if (isBulk) {
         setAgenda({
           objective: { text: data.objective, media: null },
@@ -134,7 +128,7 @@ export default function LancerDashboard() {
       }
       setAiModal({ ...aiModal, isOpen: false });
       setAiTopic("");
-    } catch (e) { alert("AI Service Error."); }
+    } catch (e) { alert("AI Error."); }
     finally { setIsAiProcessing(false); }
   };
 
@@ -149,8 +143,7 @@ export default function LancerDashboard() {
         body: JSON.stringify({ text: `Today's Agenda: ${agenda.objective.text}`, materials: [{ link: { url: shareLink } }], state: "PUBLISHED" }),
       });
       alert("Agenda Posted!");
-    } catch (e) { alert("Classroom Sync Error."); }
-    finally { setIsClassroomLoading(false); setShowClassroomModal(false); }
+    } finally { setIsClassroomLoading(false); setShowClassroomModal(false); }
   };
 
   /** 
@@ -190,15 +183,7 @@ export default function LancerDashboard() {
 
   useEffect(() => {
     if (!user) return;
-    const syncEverything = async () => {
-      setIsScheduleSyncing(true);
-      try {
-        const res = await fetch(`/api/schedule?date=${date}`, { cache: 'no-store' });
-        const d = await res.json();
-        setScheduleType((d.scheduleType || 'NONE') as ScheduleType);
-      } catch (e) { setScheduleType('NONE'); }
-      setIsScheduleSyncing(false);
-
+    const loadData = async () => {
       const data = await agendaService.getAgenda(user.uid, date, currentClass);
       if (data) {
         const c = data.content || data;
@@ -212,31 +197,32 @@ export default function LancerDashboard() {
         });
         if (data.layout) setLayout(data.layout);
         if (data.themeId && THEMES[data.themeId]) setTheme(THEMES[data.themeId]);
+        if (data.scheduleType) setScheduleType(data.scheduleType);
       } else {
         setAgenda({ objective: { text: '', media: null }, bellRinger: { text: '', media: null }, miniLecture: { text: '', media: null }, discussion: { text: '', media: null }, activity: { text: '', media: null }, independentWork: { text: '', media: null } });
       }
     };
-    syncEverything();
+    loadData();
   }, [user, date, currentClass]);
 
   useEffect(() => {
     if (!user || authLoading) return;
     const timer = setTimeout(async () => {
       setIsSaving(true);
-      await agendaService.saveAgenda(user.uid, date, currentClass, { agenda, layout, themeId: theme.id });
+      await agendaService.saveAgenda(user.uid, date, currentClass, { agenda, layout, themeId: theme.id, scheduleType });
       setIsSaving(false);
     }, 2000);
     return () => clearTimeout(timer);
-  }, [agenda, layout, theme, user, date, currentClass]);
+  }, [agenda, layout, theme, scheduleType, user, date, currentClass]);
 
   /** 
-   * MODULE 5: RENDER HELPERS
+   * MODULE 5: UI RENDER
    */
   const sched = getScheduleDetails(scheduleType, roomNumber || "200");
   const lunchData = getLunchTier(roomNumber || "200");
   const linkedId = mappings[currentClass];
 
-  if (authLoading) return <div className="h-screen bg-black flex items-center justify-center text-white font-black italic">Initializing Lancer.OS...</div>;
+  if (authLoading) return <div className="h-screen bg-black flex items-center justify-center text-white font-black italic tracking-widest uppercase">Initializing...</div>;
 
   if (!user) return (
     <div className="h-screen flex flex-col items-center justify-center bg-[#8a2529] font-serif text-white text-center p-6">
@@ -246,71 +232,83 @@ export default function LancerDashboard() {
         const result = await signInWithPopup(auth, provider);
         const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
         if (token) sessionStorage.setItem('gc_token', token);
-      }} className="px-12 py-6 bg-white text-[#8a2529] rounded-3xl font-black text-2xl shadow-2xl hover:scale-105 transition active:scale-95 uppercase">Teacher Login</button>
+      }} className="px-12 py-6 bg-white text-[#8a2529] rounded-[2.5rem] font-black text-2xl shadow-2xl hover:scale-105 transition active:scale-95 uppercase">Teacher Login</button>
     </div>
   );
 
   return (
     <div className={`h-screen w-screen flex flex-col p-3 transition-colors duration-1000 overflow-hidden ${theme.bg}`}>
       
-      {/* COMMAND CENTER HEADER */}
+      {/* COMMAND CENTER HEADER - COMPACT REBUILD */}
       <header className="flex items-center justify-between bg-black/40 backdrop-blur-3xl p-2 rounded-3xl border border-white/10 shadow-2xl mb-3 relative z-[90]">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2.5 bg-white/5 text-white/40 hover:text-white rounded-xl border border-white/5 transition">
+        
+        <div className="flex items-center gap-2">
+          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 bg-white/5 text-white/40 hover:text-white rounded-xl border border-white/5 transition">
             {isSidebarOpen ? <PanelLeftClose size={18}/> : <PanelLeftOpen size={18} className="text-[#FCD450]"/>}
           </button>
-          <img src={theme.logo} className="h-8 w-auto" />
+          
+          <img src={theme.logo} className="h-8 w-auto mr-1" />
+
+          {/* SLIM DATE NAV */}
           <div className="flex items-center bg-black/40 rounded-xl p-0.5 border border-white/5 shadow-inner">
-            <button onClick={() => changeDate(-1)} className="p-1.5 text-white/40 hover:text-white transition"><ChevronLeft size={18}/></button>
-            <div onClick={() => dateInputRef.current?.showPicker()} className="px-2 font-black text-xs text-white min-w-[80px] text-center cursor-pointer hover:text-[#FCD450]">
+            <button onClick={() => changeDate(-1)} className="p-1 text-white/40 hover:text-white transition"><ChevronLeft size={16}/></button>
+            <div onClick={() => dateInputRef.current?.showPicker()} className="px-2 font-black text-[11px] text-white min-w-[70px] text-center cursor-pointer hover:text-[#FCD450]">
                {new Date(date + 'T00:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                <input ref={dateInputRef} type="date" className="absolute invisible" value={date} onChange={(e) => setDate(e.target.value)} />
             </div>
-            <button onClick={() => changeDate(1)} className="p-1.5 text-white/40 hover:text-white transition"><ChevronRight size={18}/></button>
+            <button onClick={() => changeDate(1)} className="p-1 text-white/40 hover:text-white transition"><ChevronRight size={16}/></button>
           </div>
-          <div className="flex flex-col border-l border-white/10 pl-3">
-             <div className="flex items-center gap-1.5"><ClockIcon size={12} className="text-[#FCD450]" /><span className="text-white font-black text-sm leading-none">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div>
-             <a href="https://salpointe-prayers.web.app" target="_blank" className="text-[7px] text-[#FCD450] font-black uppercase tracking-widest mt-0.5 hover:underline flex items-center gap-1"><Cross size={8} /> PRAY</a>
+
+          <div className="flex flex-col border-l border-white/10 pl-2">
+             <div className="flex items-center gap-1.5">
+                <ClockIcon size={11} className="text-[#FCD450]" />
+                <span className="text-white font-black text-sm leading-none">{currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+             </div>
+             <a href="https://salpointe-prayers.web.app" target="_blank" className="text-[7px] text-[#FCD450] font-black uppercase tracking-widest mt-0.5 hover:underline">PRAY</a>
           </div>
         </div>
 
-        <div className="flex-1 px-4"><TabNavigation currentClass={currentClass} setClass={setCurrentClass} /></div>
+        {/* COMPACT CLASS TABS */}
+        <div className="flex-1 px-2"><TabNavigation currentClass={currentClass} setClass={setCurrentClass} /></div>
 
         <div className="flex items-center gap-2">
+          {/* SYNC INDICATOR */}
           <div className="mr-1 flex items-center gap-2 px-3 py-1.5 bg-black/30 rounded-xl border border-white/5">
-            <div className={`h-2 w-2 rounded-full ${isSaving ? 'bg-amber-500 animate-pulse shadow-[0_0_8px_orange]' : 'bg-emerald-500 shadow-[0_0_8px_lime]'}`} />
-            <span className="text-[8px] font-black text-white/40 uppercase tracking-widest leading-none">{isSaving ? 'Saving' : 'Synced'}</span>
+            <div className={`h-2 w-2 rounded-full ${isSaving ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500 shadow-[0_0_10px_lime]'}`} />
+            <span className="text-[9px] font-black text-white/40 uppercase tracking-widest leading-none">{isSaving ? 'Saving' : 'Synced'}</span>
           </div>
 
+          {/* TIMER PILL */}
           <div className="relative" ref={timerMenuRef}>
-            <button onClick={() => setIsTimerMenuOpen(!isTimerMenuOpen)} className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all ${isTimerRunning ? 'bg-[#FCD450] border-[#FCD450] text-black scale-105' : 'bg-white/5 border-white/5 text-white/80'}`}>
+            <button onClick={() => setIsTimerMenuOpen(!isTimerMenuOpen)} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all ${isTimerRunning ? 'bg-[#FCD450] border-[#FCD450] text-black scale-105' : 'bg-white/5 border-white/5 text-white/80'}`}>
               <TimerIcon size={14} className={isTimerRunning ? "animate-pulse" : "opacity-40"} />
               <span className="text-sm font-mono font-black">{Math.floor(timerSeconds / 60).toString().padStart(2, '0')}:{(timerSeconds % 60).toString().padStart(2, '0')}</span>
             </button>
             {isTimerMenuOpen && (
-              <div className="absolute right-0 top-14 w-64 bg-[#0f172a] border border-white/20 rounded-[2rem] shadow-3xl z-[110] p-6 animate-in zoom-in text-white">
-                <div className="grid grid-cols-2 gap-2 mb-4">{[1, 5, 10, 20].map(m => (<button key={m} onClick={() => { setTimerSeconds(m * 60); setIsTimerRunning(true); setIsTimerMenuOpen(false); }} className="py-3 bg-white/5 rounded-2xl text-[10px] font-black hover:bg-white/10 border border-white/5 transition">{m} MIN</button>))}</div>
+              <div className="absolute right-0 top-14 w-64 bg-[#0f172a] border border-white/20 rounded-[2rem] shadow-3xl z-[110] p-6 animate-in zoom-in duration-200 text-white">
+                <div className="grid grid-cols-2 gap-2 mb-4">{[1, 5, 10, 20].map(m => (<button key={m} onClick={() => { setTimerSeconds(m * 60); setIsTimerRunning(true); setIsTimerMenuOpen(false); }} className="py-2.5 bg-white/5 rounded-xl text-[10px] font-black hover:bg-white/10 border border-white/5 transition">{m} MIN</button>))}</div>
                 <input type="number" value={customTimerMins} onChange={(e) => setCustomTimerMins(e.target.value)} placeholder="00" className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-white font-bold text-center outline-none mb-2" />
                 <div className="flex gap-2">
-                  <button onClick={handleTimerAction} className={`flex-1 py-3 rounded-xl font-black text-xs transition ${isTimerRunning ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500 text-white shadow-lg'}`}>{isTimerRunning ? <Pause size={12} className="inline mr-1"/> : <Play size={12} className="inline mr-1"/>} START</button>
+                  <button onClick={handleTimerAction} className={`flex-1 py-4 rounded-2xl font-black text-xs transition ${isTimerRunning ? 'bg-red-500/20 text-red-400' : 'bg-emerald-500 text-white shadow-lg'}`}>{isTimerRunning ? <Pause size={12}/> : <Play size={12}/>} START</button>
                   <button onClick={() => { setTimerSeconds(0); setIsTimerRunning(false); }} className="px-3 bg-white/5 rounded-xl text-white/40"><RotateCcw size={16} /></button>
                 </div>
               </div>
             )}
           </div>
 
-          <button onClick={() => setAiModal({ isOpen: true, mode: 'bulk', sectionKey: '' })} className="p-2.5 bg-white/5 text-[#FCD450] border border-white/5 rounded-xl hover:bg-[#FCD450] hover:text-black transition shadow-lg"><Wand2 size={20}/></button>
+          <button onClick={() => setAiModal({ isOpen: true, mode: 'bulk', sectionKey: '' })} className="p-2.5 bg-white/5 text-[#FCD450] border border-white/5 rounded-xl hover:bg-[#FCD450] hover:text-black transition shadow-lg"><Wand2 size={18}/></button>
 
+          {/* THEME MENU */}
           <div className="relative" ref={themeMenuRef}>
-            <button onClick={() => setShowThemeMenu(!showThemeMenu)} className={`p-2.5 rounded-xl transition-all border ${showThemeMenu ? 'bg-white text-black' : 'bg-white/5 text-white/80 border-white/5'}`}><Palette size={20} /></button>
+            <button onClick={() => setShowThemeMenu(!showThemeMenu)} className={`p-2.5 rounded-xl transition-all border ${showThemeMenu ? 'bg-white text-black' : 'bg-white/5 text-white/80 border-white/5'}`}><Palette size={18} /></button>
             {showThemeMenu && (
-              <div className="absolute right-0 top-12 w-[450px] bg-[#0f172a] border border-white/20 rounded-[3rem] shadow-3xl z-[100] p-5 grid grid-cols-2 gap-2 animate-in zoom-in">
-                {Object.values(THEMES).map((t: any) => (<button key={t.id} onClick={() => { setTheme(t); setShowThemeMenu(false); }} className={`flex flex-col items-start p-3 rounded-[1.5rem] transition-all border-2 ${theme.id === t.id ? 'bg-white border-white shadow-xl' : 'bg-white/5 border-transparent hover:bg-white/10'}`}><div className="flex justify-between w-full mb-1"><div className={`h-4 w-4 rounded-full shadow-md ${t.bg}`} /><div className={`h-1.5 w-1.5 rounded-full ${t.accent.replace('border-', 'bg-')}`} /></div><span className={`text-[10px] font-black uppercase tracking-widest ${theme.id === t.id ? 'text-black' : 'text-white'}`}>{t.name}</span></button>))}
+              <div className="absolute right-0 top-14 w-[400px] bg-[#0f172a] border border-white/20 rounded-[2.5rem] shadow-3xl z-[100] p-5 grid grid-cols-2 gap-2 animate-in zoom-in">
+                {Object.values(THEMES).map((t: any) => (<button key={t.id} onClick={() => { setTheme(t); setShowThemeMenu(false); }} className={`flex flex-col items-start p-3 rounded-[1.5rem] transition-all border-2 ${theme.id === t.id ? 'bg-white border-white shadow-xl' : 'bg-white/5 border-transparent hover:bg-white/10'}`}><div className="flex justify-between w-full mb-1"><div className={`h-4 w-4 rounded-full shadow-md ${t.bg}`} /><div className={`h-1.5 w-1.5 rounded-full ${t.accent.replace('border-', 'bg-')}`} /></div><span className={`text-[9px] font-black uppercase tracking-widest ${theme.id === t.id ? 'text-black' : 'text-white'}`}>{t.name}</span></button>))}
               </div>
             )}
           </div>
 
-          <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/share/${user?.uid}/${currentClass}/${date}`); alert("Public link copied!"); }} className="p-2.5 bg-white text-[#8a2529] rounded-xl shadow-lg hover:scale-105 transition"><Share2 size={18}/></button>
+          <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/share/${user?.uid}/${currentClass}/${date}`); alert("Link copied!"); }} className="p-2.5 bg-white text-[#8a2529] rounded-xl shadow-lg hover:scale-105 transition"><Share2 size={18}/></button>
           <button onClick={() => signOut(auth)} className="ml-1 p-2 text-white/10 hover:text-red-400 transition"><LogOut size={18}/></button>
         </div>
       </header>
@@ -319,30 +317,25 @@ export default function LancerDashboard() {
       <div className="flex-1 flex gap-4 min-h-0 relative">
         <aside className={`bg-black/30 backdrop-blur-md rounded-[3rem] border border-white/5 flex flex-col gap-6 overflow-hidden transition-all duration-500 shadow-2xl ${isSidebarOpen ? 'w-72 p-6 opacity-100' : 'w-0 p-0 opacity-0 border-none'}`}>
            <div className="flex flex-col gap-3 min-w-[240px]">
-             <div className="flex justify-between items-center px-2"><span className="text-[10px] font-black text-white/30 uppercase tracking-widest">Room Identification</span>{lunchData.recognized && !isRoomEditing && <div className="flex items-center gap-1 text-[9px] font-black text-emerald-400 uppercase leading-none"><Lock size={10} /> Saved</div>}</div>
+             <div className="flex justify-between items-center px-2"><span className="text-[10px] font-black text-white/30 uppercase tracking-widest leading-none">Room Setting</span>{lunchData.recognized && !isRoomEditing && <div className="flex items-center gap-1 text-[9px] font-black text-emerald-400 uppercase leading-none"><Lock size={10} /> Saved</div>}</div>
              <div className="relative group">
                <input value={roomNumber} disabled={!isRoomEditing} onChange={(e) => setRoomNumber(e.target.value)} className={`w-full bg-white/5 border rounded-2xl p-4 text-white font-black text-2xl outline-none transition-all ${!isRoomEditing ? 'border-transparent opacity-80' : 'border-[#FCD450]'}`} />
                <div className="absolute right-3 top-1/2 -translate-y-1/2">
                   {isRoomEditing ? <button onClick={async () => { await agendaService.saveTeacherSettings(user!.uid, { roomNumber }); setIsRoomEditing(false); }} className="p-2 bg-emerald-500 text-white rounded-lg shadow-lg"><Save size={14}/></button> : <button onClick={() => setIsRoomEditing(true)} className="p-2 bg-white/10 text-white/40 rounded-lg"><Edit3 size={14}/></button>}
                </div>
              </div>
-             {lunchData.recognized && (<div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex justify-between items-center animate-in slide-in-from-top-2"><span className="text-[10px] font-black text-emerald-400 uppercase">Lunch Location</span><span className="text-xs font-black text-white">{lunchData.tier === 1 ? '1st LUNCH' : '2nd LUNCH'}</span></div>)}
+             {lunchData.recognized && (<div className="px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex justify-between items-center animate-in slide-in-from-top-2"><span className="text-[10px] font-black text-emerald-400 uppercase leading-none">Location</span><span className="text-xs font-black text-white">{lunchData.tier === 1 ? '1st LUNCH' : '2nd LUNCH'}</span></div>)}
            </div>
            
            <div className="flex flex-col gap-2 border-t border-white/5 pt-4 min-w-[240px]">
-             <div className="flex justify-between items-end">
-               <h3 className="text-white font-black italic text-sm leading-none">Schedule</h3>
-               <span className={`text-[8px] font-bold uppercase flex items-center gap-1 ${isScheduleSyncing ? 'text-amber-500' : 'text-emerald-400'}`}>
-                 {isScheduleSyncing ? <Loader2 size={8} className="animate-spin" /> : <CheckCircle2 size={8} />} 
-                 {isScheduleSyncing ? 'Syncing...' : 'Auto-Synced'}
-               </span>
-             </div>
-             <div className="bg-white/10 rounded-2xl p-4 border border-white/10 text-center shadow-inner">
-               <p className="text-[10px] font-black text-[#FCD450] uppercase tracking-widest mb-1">{sched.title}</p>
-             </div>
+             <h3 className="text-white font-black italic text-sm leading-none">Manual Schedule</h3>
+             <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as ScheduleType)} className="w-full bg-white/10 text-white text-xs p-3 rounded-2xl border-none font-black outline-none cursor-pointer hover:bg-white/20 transition">
+               <option value="A">Schedule A</option><option value="B">Schedule B</option><option value="B-Late">Late Arrival</option><option value="B-Assembly">Assembly</option><option value="B-Early">Early Dismiss</option><option value="C">Schedule C</option><option value="NONE">No School</option>
+             </select>
            </div>
 
            <div className="space-y-3 min-w-[240px] overflow-y-auto custom-scrollbar pr-1 flex-1">
+              <p className="text-[10px] font-black text-[#FCD450] uppercase tracking-[0.2em] mb-4">{sched.title}</p>
               {sched.periods.map((p: any, i: number) => (<div key={i} className="bg-white/5 p-3 rounded-2xl border border-white/5"><p className="text-[9px] font-bold text-white/30 uppercase mb-0.5">{p.label}</p><p className="text-xs font-black text-white">{p.time}</p></div>))}
               {sched.lunch && (<div className="bg-emerald-500/10 p-3 rounded-2xl border border-emerald-500/30 shadow-lg shadow-emerald-900/10"><p className="text-[9px] font-black text-emerald-400 uppercase mb-0.5">{sched.lunch.label}</p><p className="text-xs font-black text-white">{sched.lunch.time}</p></div>)}
               {sched.splitClass && (<div className="bg-white/5 p-3 rounded-2xl border border-white/5"><p className="text-[9px] font-bold text-white/30 uppercase mb-0.5">{sched.splitClass.label}</p><p className="text-xs font-black text-white">{sched.splitClass.time}</p></div>)}
@@ -390,7 +383,7 @@ export default function LancerDashboard() {
         </div>
       )}
 
-      {/* CLASSROOM LINK MODAL (Restored logic) */}
+      {/* CLASSROOM LINK MODAL */}
       {showClassroomModal && (
         <div className="absolute inset-0 z-[120] flex items-center justify-center bg-black/90 p-6 text-white">
           <div className="bg-[#1a1a1a] border border-white/10 w-full max-w-lg rounded-[3.5rem] p-10 shadow-2xl flex flex-col max-h-[85vh]">
@@ -399,11 +392,10 @@ export default function LancerDashboard() {
                {courses.map(course => (
                  <div key={course.id} className="flex gap-2">
                    <button onClick={() => handlePostToClassroom(course.id)} className="flex-1 p-5 bg-white/5 hover:bg-emerald-600/20 border border-white/5 rounded-2xl text-left font-bold text-sm truncate">{course.name}</button>
-                   <button onClick={async () => { const newM = { ...mappings, [currentClass]: course.id }; await agendaService.saveTeacherSettings(user!.uid, { classroomMappings: newM }); setMappings(newM); setShowClassroomModal(false); }} className={`p-5 rounded-2xl border ${mappings[currentClass] === course.id ? 'bg-[#FCD450] text-black border-[#FCD450]' : 'bg-white/5 border-white/5'}`}><LinkIcon size={18}/></button>
+                   <button onClick={async () => { const newM = { ...mappings, [currentClass]: course.id }; await agendaService.saveTeacherSettings(user!.uid, { classroomMappings: newM }); setMappings(newM); setShowClassroomModal(false); }} className={`p-5 rounded-2xl border ${mappings[currentClass] === course.id ? 'bg-[#FCD450] text-black border-[#FCD450]' : 'bg-white/5 border-white/5 text-white/20'}`}><LinkIcon size={18}/></button>
                  </div>
                ))}
              </div>
-             <button onClick={() => setShowClassroomModal(false)} className="mt-8 text-xs opacity-20 uppercase">Cancel</button>
           </div>
         </div>
       )}
@@ -417,26 +409,8 @@ export default function LancerDashboard() {
           </div>
         </div>
       )}
-
-      {/* FOOTER: Restored Layout Adjustment Logic */}
-      <footer className="mt-1 flex justify-between items-center px-6 py-2 bg-black/10 rounded-2xl border border-white/5 text-[10px] uppercase tracking-[0.3em] font-bold text-white/10">
-        <div className="flex gap-8">
-           <div className="flex gap-2 items-center opacity-40 hover:opacity-100 transition-opacity">
-             <Columns size={12}/> COLS: 
-             {[1,2,3].map(n => (
-               <button key={n} onClick={() => adjustLayout(`col${n}`, 0.1)} className="hover:text-white transition">GROW {n}</button>
-             ))}
-           </div>
-           <div className="flex gap-2 items-center opacity-40 hover:opacity-100 transition-opacity">
-             <Maximize2 size={12}/> ROWS: 
-             {[1,2].map(n => (
-               <button key={n} onClick={() => adjustLayout(`row${n}`, 0.1)} className="hover:text-white transition">GROW {n}</button>
-             ))}
-             <button onClick={() => setLayout({col1:1,col2:1,col3:1,row1:1,row2:1})} className="ml-6 hover:text-red-400 transition">RESET GRID</button>
-           </div>
-        </div>
-        <span className="opacity-30">Salpointe Catholic • 75 Years</span>
-      </footer>
+      
+      <footer className="mt-1 flex justify-center text-[7px] font-black text-white/5 uppercase tracking-[0.4em] font-serif italic">Salpointe Catholic • Leading Excellence Since 1950</footer>
     </div>
   );
 }
