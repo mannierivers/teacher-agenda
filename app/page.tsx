@@ -33,14 +33,14 @@ export default function LancerDashboard() {
   const timerMenuRef = useRef<HTMLDivElement>(null);
   const commandMenuRef = useRef<HTMLDivElement>(null);
 
-  // App Navigation
+  // App State
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [currentClass, setCurrentClass] = useState('p1');
   const [layout, setLayout] = useState({ col1: 1, col2: 1, col3: 1, row1: 1, row2: 1 });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isScheduleSyncing, setIsScheduleSyncing] = useState(false);
   
-  // UI Overlays
+  // UI Toggles
   const [showThemeMenu, setShowThemeMenu] = useState(false);
   const [showCommandMenu, setShowCommandMenu] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -53,26 +53,23 @@ export default function LancerDashboard() {
   const [isTimerMenuOpen, setIsTimerMenuOpen] = useState(false);
   const [customTimerMins, setCustomTimerMins] = useState("");
 
-  // Room & Schedule
+  // Schedule & Room
   const [roomNumber, setRoomNumber] = useState("");
   const [isRoomEditing, setIsRoomEditing] = useState(false);
   const [scheduleType, setScheduleType] = useState<ScheduleType>('NONE');
   const [schoolEvents, setSchoolEvents] = useState<string[]>([]);
   
-  // Custom Labels
   const [sectionNames, setSectionNames] = useState<any>({
     objective: "Lesson Objective", bellRinger: "Bell Ringer", miniLecture: "Mini-Lecture",
     discussion: "Guided Discussion", activity: "Activity", independentWork: "Independent Work"
   });
 
-  // Daily Lesson Data
   const [agenda, setAgenda] = useState<any>({
     objective: { text: '', media: null }, bellRinger: { text: '', media: null },
     miniLecture: { text: '', media: null }, discussion: { text: '', media: null },
     activity: { text: '', media: null }, independentWork: { text: '', media: null }
   });
 
-  // Integrations State
   const [aiModal, setAiModal] = useState({ isOpen: false, mode: 'bulk' as 'bulk' | 'single', sectionKey: 'objective' });
   const [aiTopic, setAiTopic] = useState("");
   const [aiSubject, setAiSubject] = useState("General");
@@ -86,13 +83,24 @@ export default function LancerDashboard() {
   const [isClassroomLoading, setIsClassroomLoading] = useState(false);
 
   /** 
-   * MODULE 3: CORE FUNCTIONS
+   * MODULE 3: HANDLERS
    */
   const manualSave = async () => {
     if (!user) return;
     setIsSaving(true);
     await agendaService.saveAgenda(user.uid, date, currentClass, { agenda, layout, themeId: theme.id, scheduleType });
     setTimeout(() => setIsSaving(false), 800);
+  };
+
+  const handleClassTabChange = async (id: string) => {
+    await manualSave(); setCurrentClass(id);
+  };
+
+  const handleDateChange = async (days: number) => {
+    await manualSave();
+    const d = new Date(date + 'T00:00:00'); 
+    d.setDate(d.getDate() + days);
+    setDate(d.toISOString().split('T')[0]);
   };
 
   const adjustLayout = (dim: string, amount: number) => {
@@ -110,22 +118,10 @@ export default function LancerDashboard() {
     setIsTimerRunning(!isTimerRunning);
   };
 
-  const handleClassTabChange = async (id: string) => {
-    await manualSave(); 
-    setCurrentClass(id);
-  };
-
-  const handleDateChange = async (days: number) => {
-    await manualSave();
-    const d = new Date(date + 'T00:00:00'); 
-    d.setDate(d.getDate() + days);
-    setDate(d.toISOString().split('T')[0]);
-  };
-
   const copyPublicShareLink = () => {
     const url = `${window.location.origin}/share/${user?.uid}/${currentClass}/${date}`;
     navigator.clipboard.writeText(url);
-    alert("Public link copied!");
+    alert("Share Link Copied!");
     setShowCommandMenu(false);
   };
 
@@ -139,7 +135,7 @@ export default function LancerDashboard() {
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: `Agenda: ${agenda.objective.text.replace(/<[^>]*>/g, '')}`, materials: [{ link: { url: shareLink } }], state: "PUBLISHED" }),
       });
-      alert("Synced to Google Classroom.");
+      alert("Agenda Linked!");
     } finally { setIsClassroomLoading(false); setShowClassroomModal(false); }
   };
 
@@ -238,7 +234,7 @@ export default function LancerDashboard() {
   const lunchData = getLunchTier(roomNumber || "200");
   const linkedId = mappings[currentClass];
 
-  if (authLoading) return <div className="h-screen bg-black flex items-center justify-center text-white font-black italic shadow-2xl uppercase tracking-widest animate-pulse">Initializing Lancer.OS...</div>;
+  if (authLoading) return <div className="h-screen bg-black flex items-center justify-center text-white font-black italic shadow-2xl uppercase tracking-widest animate-pulse text-xs">SALPOINTE OS...</div>;
 
   if (!user) return (
     <div className="h-screen flex flex-col items-center justify-center bg-[#8a2529] font-serif text-white text-center p-6 select-none overflow-hidden">
@@ -248,7 +244,7 @@ export default function LancerDashboard() {
         const result = await signInWithPopup(auth, provider);
         const token = GoogleAuthProvider.credentialFromResult(result)?.accessToken;
         if (token) sessionStorage.setItem('gc_token', token);
-      }} className="px-10 py-5 bg-white text-[#8a2529] rounded-3xl font-black text-xl shadow-2xl hover:scale-105 transition active:scale-95 uppercase tracking-widest">Teacher Login</button>
+      }} className="px-10 py-5 bg-white text-[#8a2529] rounded-3xl font-black text-xl shadow-2xl hover:scale-105 transition active:scale-95 uppercase">Teacher Login</button>
     </div>
   );
 
@@ -257,6 +253,7 @@ export default function LancerDashboard() {
       
       {/* COMMAND CENTER HEADER */}
       <header className="flex items-center justify-between bg-black/40 backdrop-blur-3xl p-1.5 rounded-[2rem] border border-white/10 shadow-2xl mb-2 relative z-[90]">
+        
         <div className="flex items-center gap-2">
           <img src={theme.logo} className="h-7 w-auto mx-1" />
           <div className="flex items-center bg-black/40 rounded-xl p-0.5 border border-white/5 shadow-inner">
@@ -301,13 +298,13 @@ export default function LancerDashboard() {
 
           <button onClick={() => setAiModal({ isOpen: true, mode: 'bulk', sectionKey: 'objective' })} className="p-2 bg-white/5 text-[#FCD450] border border-white/5 rounded-xl hover:bg-[#FCD450] hover:text-black transition shadow-lg"><Wand2 size={16}/></button>
 
-          {/* MORE TOOLS MENU */}
+          {/* CONSOLIDATED COMMAND MENU */}
           <div className="relative" ref={commandMenuRef}>
-            <button onClick={() => setShowCommandMenu(!showCommandMenu)} className={`p-2 rounded-xl transition-all border ${showCommandMenu ? 'bg-white text-black' : 'bg-white/5 text-white/40 border-white/5'}`}>
+            <button onClick={() => setShowCommandMenu(!showCommandMenu)} className={`p-2 rounded-xl transition-all border ${showCommandMenu ? 'bg-white text-black' : 'bg-white/40'}`}>
               <MoreVertical size={18} />
             </button>
             {showCommandMenu && (
-              <div className="absolute right-0 top-12 w-56 bg-[#0f172a] border border-white/20 rounded-[2rem] shadow-3xl z-[100] p-3 animate-in zoom-in flex flex-col gap-1">
+              <div className="absolute right-0 top-12 w-56 bg-[#0f172a] border border-white/20 rounded-[2rem] shadow-3xl z-[100] p-3 animate-in zoom-in flex flex-col gap-1 text-left">
                 <button onClick={() => { setShowThemeMenu(true); setShowCommandMenu(false); }} className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl text-[10px] font-black uppercase text-white"><Palette size={16} className="text-blue-400"/> Theme</button>
                 <button onClick={copyPublicShareLink} className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl text-[10px] font-black uppercase text-white"><Share2 size={16} className="text-emerald-400"/> Share</button>
                 <button onClick={() => { setShowSettingsModal(true); setShowCommandMenu(false); }} className="w-full flex items-center gap-3 p-3 hover:bg-white/5 rounded-2xl text-[10px] font-black uppercase text-white"><Settings2 size={16} className="text-[#FCD450]"/> Labels</button>
@@ -331,16 +328,12 @@ export default function LancerDashboard() {
         </div>
       </header>
 
-      {/* MAIN VIEW AREA */}
       <div className="flex-1 flex gap-3 min-h-0 relative">
         <main className="flex-1 grid grid-cols-3 grid-rows-2 gap-3 relative">
-          {isAiProcessing && (<div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-md rounded-[3.5rem] flex flex-col items-center justify-center animate-in fade-in"><Sparkles size={80} className="text-[#FCD450] animate-pulse mb-8" /><h2 className="text-4xl font-black italic text-white tracking-tighter uppercase text-center px-12 italic tracking-[0.1em]">Salpointe AI is building your board...</h2></div>)}
+          {isAiProcessing && (<div className="absolute inset-0 z-[100] bg-black/80 backdrop-blur-md rounded-[3.5rem] flex flex-col items-center justify-center animate-in fade-in"><Sparkles size={80} className="text-[#FCD450] animate-pulse mb-8" /><h2 className="text-4xl font-black italic text-white tracking-tighter uppercase text-center px-12 italic tracking-[0.1em]">Salpointe AI is building your lesson...</h2></div>)}
           {['objective', 'bellRinger', 'miniLecture', 'discussion', 'activity', 'independentWork'].map((key) => (
             <AgendaSection 
-              key={key} 
-              title={sectionNames[key]} 
-              data={agenda[key]} 
-              theme={theme} 
+              key={key} title={sectionNames[key]} data={agenda[key]} theme={theme} 
               onChange={(newData: any) => setAgenda({ ...agenda, [key]: newData })} 
               onMaximize={() => setFocusedSection(key)} 
               onOpenAI={() => setAiModal({ isOpen: true, mode: 'single', sectionKey: key })} 
@@ -357,10 +350,10 @@ export default function LancerDashboard() {
           </div>
         )}
 
-        {/* SIDEBAR TOGGLE BAR (ON RIGHT) */}
+        {/* SIDEBAR TOGGLE (VERTICAL HANDLE ON RIGHT) */}
         <div 
           onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-          className="w-2 hover:w-4 bg-white/5 hover:bg-[#FCD450]/20 cursor-pointer transition-all flex items-center justify-center group z-[80]"
+          className="w-2 hover:w-4 bg-white/5 hover:bg-[#FCD450]/20 cursor-pointer transition-all flex items-center justify-center group z-[80] rounded-full"
         >
           {isSidebarOpen ? <PanelRightClose size={12} className="opacity-0 group-hover:opacity-100"/> : <PanelRightOpen size={12} className="opacity-0 group-hover:opacity-100 text-[#FCD450]"/>}
         </div>
@@ -368,34 +361,39 @@ export default function LancerDashboard() {
         {/* THE SIDEBAR */}
         <aside className={`bg-black/30 backdrop-blur-md rounded-[3rem] border border-white/5 flex flex-col gap-4 overflow-hidden transition-all duration-500 shadow-2xl ${isSidebarOpen ? 'w-72 p-6 opacity-100' : 'w-0 p-0 opacity-0 border-none'}`}>
            <div className="flex flex-col gap-2 min-w-[240px]">
-             <div className="flex justify-between items-center px-2"><span className="text-[10px] font-black text-white/30 uppercase tracking-widest leading-none">Room Setting</span>{lunchData.recognized && !isRoomEditing && <div className="flex items-center gap-1 text-[9px] font-black text-emerald-400 uppercase leading-none"><Lock size={10} /> Saved</div>}</div>
+             <div className="flex justify-between items-center px-2 text-[10px] font-black text-white/30 uppercase tracking-widest">Room Setting{lunchData.recognized && !isRoomEditing && <div className="flex items-center gap-1 text-[9px] text-emerald-400"><Lock size={10} /> Saved</div>}</div>
              <div className="relative group">
                <input value={roomNumber} disabled={!isRoomEditing} onChange={(e) => setRoomNumber(e.target.value)} className={`w-full bg-white/5 border rounded-2xl p-3 text-white font-black text-2xl outline-none transition-all ${!isRoomEditing ? 'border-transparent opacity-80' : 'border-[#FCD450]'}`} />
                <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-1">
                   {isRoomEditing ? <button onClick={async () => { await agendaService.saveTeacherSettings(user!.uid, { roomNumber }); setIsRoomEditing(false); }} className="p-2 bg-emerald-500 text-white rounded-lg shadow-lg"><Save size={14}/></button> : <button onClick={() => setIsRoomEditing(true)} className="p-2 bg-white/10 text-white/40 rounded-lg hover:text-white transition"><Edit3 size={14}/></button>}
                </div>
              </div>
-             {lunchData.recognized && (<div className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex justify-between items-center animate-in slide-in-from-top-2"><span className="text-[10px] font-black text-emerald-400 uppercase">Lunch</span><span className="text-xs font-black text-white">{lunchData.tier === 1 ? '1st' : '2nd'}</span></div>)}
+             {lunchData.recognized && (<div className="px-4 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl flex justify-between items-center animate-in slide-in-from-top-2"><span className="text-[10px] font-black text-emerald-400 uppercase leading-none">Detection</span><span className="text-xs font-black text-white leading-none">{lunchData.tier === 1 ? '1st' : '2nd'} LUNCH</span></div>)}
            </div>
            
            <div className="flex flex-col gap-2 border-t border-white/5 pt-3 min-w-[240px]">
-             <h3 className="text-white font-black italic text-sm leading-none px-2">Schedule</h3>
+             <h3 className="text-white font-black italic text-sm leading-none px-2 uppercase">Manual Set</h3>
              <select value={scheduleType} onChange={(e) => setScheduleType(e.target.value as ScheduleType)} className="w-full bg-white/10 text-white text-xs p-3 rounded-2xl border-none font-black outline-none cursor-pointer hover:bg-white/20 transition text-center appearance-none">
                <option value="A">Schedule A</option><option value="B">Schedule B</option><option value="B-Late">Late Arrival</option><option value="B-Assembly">Assembly</option><option value="B-Early">Early Dismiss</option><option value="C">Schedule C</option><option value="NONE">No School</option>
              </select>
            </div>
 
+           {/* 👈 FIXED LINEAR TIMELINE UI */}
            <div className="space-y-1.5 min-w-[240px] overflow-y-auto custom-scrollbar pr-1 flex-1">
               <p className="text-[10px] font-black text-[#FCD450] uppercase tracking-widest mb-2 leading-none text-center underline underline-offset-4">{sched.title}</p>
-              {sched.periods.map((p: any, i: number) => (<div key={i} className="bg-white/5 p-2 px-3 rounded-xl border border-white/5 flex justify-between items-center"><span className="text-[9px] font-bold text-white/30 uppercase">{p.label}</span><span className="text-[10px] font-black text-white">{p.time}</span></div>))}
-              {sched.lunch && (<div className="bg-emerald-500/10 p-2 px-3 rounded-xl border border-emerald-500/30 flex justify-between items-center"><span className="text-[9px] font-black text-emerald-400 uppercase">Lunch</span><span className="text-[10px] font-black text-white">{sched.lunch.time}</span></div>)}
+              {sched.timeline.map((item: any, i: number) => (
+                <div key={i} className={`p-2 px-3 rounded-xl border flex justify-between items-center transition ${item.isLunch ? 'bg-emerald-500/10 border-emerald-500/30 shadow-lg' : 'bg-white/5 border-white/5'}`}>
+                  <span className={`text-[9px] font-bold uppercase ${item.isLunch ? 'text-emerald-400' : 'text-white/30'}`}>{item.label}</span>
+                  <span className={`text-[10px] font-black ${item.isLunch ? 'text-white' : 'text-white/80'}`}>{item.time}</span>
+                </div>
+              ))}
            </div>
 
            <div className="flex flex-col gap-2 border-t border-white/5 pt-3 min-w-[240px] h-32 overflow-hidden text-left">
               <div className="flex items-center gap-2 px-2 text-white/40 font-black italic text-xs uppercase mb-1"><Bell size={12} /> Events</div>
               <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2 pr-1 text-[10px] text-blue-50 font-bold">
                  {schoolEvents.length > 0 ? schoolEvents.map((ev, i) => (
-                   <div key={i} className="bg-blue-600/10 border border-blue-500/20 p-2 rounded-xl flex items-start gap-2"><Info size={10} className="text-blue-400 mt-0.5" />{ev}</div>
+                   <div key={i} className="bg-blue-600/10 border border-blue-500/20 p-2 rounded-xl flex items-start gap-2 shadow-inner"><Info size={10} className="text-blue-400 mt-0.5" />{ev}</div>
                  )) : <p className="text-center opacity-20 italic">No events.</p>}
               </div>
            </div>
@@ -404,7 +402,7 @@ export default function LancerDashboard() {
 
       <footer className="mt-1 flex justify-center text-[7px] font-black text-white/5 uppercase tracking-[0.4em] font-serif italic border-t border-white/5 pt-1 select-none">Salpointe Catholic • Established 1950</footer>
 
-      {/* MODALS: BOARD SETTINGS, AI, CLASSROOM (Inherited logic from previous builds) */}
+      {/* MODALS: SETTINGS, AI, CLASSROOM */}
       {showSettingsModal && (
         <div className="absolute inset-0 z-[160] flex items-center justify-center bg-black/95 p-6 text-white font-sans text-left">
           <div className="bg-[#1a1a1a] border border-white/10 w-full max-w-2xl rounded-[4rem] p-12 shadow-3xl flex flex-col animate-in zoom-in">
@@ -412,7 +410,7 @@ export default function LancerDashboard() {
              <div className="grid grid-cols-2 gap-6 mb-10">
                 {Object.keys(sectionNames).map((key) => (<div key={key}><label className="text-[10px] font-black text-white/30 uppercase tracking-widest mb-2 block">{key} Name</label><input value={sectionNames[key]} onChange={(e) => setSectionNames({...sectionNames, [key]: e.target.value})} className="w-full bg-white/5 border border-white/10 rounded-2xl p-4 text-white font-bold outline-none focus:border-[#FCD450]" /></div>))}
              </div>
-             <button onClick={async () => { await agendaService.saveTeacherSettings(user!.uid, { sectionNames }); setShowSettingsModal(false); alert("Labels saved."); }} className="w-full py-8 bg-[#FCD450] text-[#8a2529] rounded-[3rem] font-black text-2xl uppercase tracking-widest leading-none shadow-2xl">Update Labels</button>
+             <button onClick={async () => { await agendaService.saveTeacherSettings(user!.uid, { sectionNames }); setShowSettingsModal(false); alert("Labels saved."); }} className="w-full py-8 bg-[#FCD450] text-[#8a2529] rounded-[3rem] font-black text-2xl uppercase shadow-2xl active:scale-95">Update All Labels</button>
           </div>
         </div>
       )}
@@ -421,7 +419,7 @@ export default function LancerDashboard() {
         <div className="absolute inset-0 z-[150] flex items-center justify-center bg-black/95 p-6 text-white font-sans text-left">
           <div className="bg-[#1a1a1a] border border-white/10 w-full max-w-2xl rounded-[4rem] p-12 shadow-3xl flex flex-col animate-in zoom-in">
              <div className="flex justify-between items-center mb-10"><div className="flex items-center gap-4"><div className="bg-[#FCD450] p-4 rounded-2xl text-black"><Sparkles size={28}/></div><h2 className="text-4xl font-black italic tracking-tighter uppercase">AI Helper</h2></div><button onClick={() => setAiModal({ ...aiModal, isOpen: false })}><X size={32} className="text-white/20"/></button></div>
-             <div className="space-y-8"><div className="grid grid-cols-2 gap-6"><div><label className="text-[10px] font-black uppercase text-white/30 tracking-[0.2em] block mb-3 px-2">Subject</label><select value={aiSubject} onChange={(e) => setAiSubject(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 text-white font-black outline-none focus:border-[#FCD450] appearance-none"><option value="General">General</option><option value="Theology">Theology</option><option value="STEM">Science/Tech</option><option value="Mathematics">Math</option><option value="English">English</option><option value="Fine Arts">Fine Arts</option></select></div><div><label className="text-[10px] font-black uppercase text-white/30 tracking-[0.2em] block mb-3 px-2">Topic</label><input autoFocus placeholder="Civil War..." value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 text-white font-black outline-none focus:border-[#FCD450]" /></div></div><button onClick={executeAIGeneration} disabled={!aiTopic.trim() || isAiProcessing} className="w-full py-8 bg-white text-black rounded-[3rem] font-black text-2xl hover:bg-[#FCD450] transition shadow-2xl disabled:opacity-20 uppercase tracking-widest">{isAiProcessing ? <Loader2 className="animate-spin" size={32}/> : <Wand2 size={32}/>}{aiModal.mode === 'bulk' ? 'BUILD FULL BOARD' : 'BUILD SECTION'}</button></div>
+             <div className="space-y-8"><div className="grid grid-cols-2 gap-6"><div><label className="text-[10px] font-black uppercase text-white/30 tracking-[0.2em] block mb-3 px-2">Subject</label><select value={aiSubject} onChange={(e) => setAiSubject(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 text-white font-black outline-none focus:border-[#FCD450] appearance-none"><option value="General">General</option><option value="Theology">Theology</option><option value="STEM">Science/Tech</option><option value="Mathematics">Math</option><option value="English">English</option><option value="Fine Arts">Fine Arts</option></select></div><div><label className="text-[10px] font-black uppercase text-white/30 tracking-[0.2em] block mb-3 px-2">Topic</label><input autoFocus placeholder="Civil War..." value={aiTopic} onChange={(e) => setAiTopic(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-3xl p-6 text-white font-black outline-none focus:border-[#FCD450]" /></div></div><button onClick={executeAIGeneration} disabled={!aiTopic.trim() || isAiProcessing} className="w-full py-8 bg-white text-black rounded-[3rem] font-black text-2xl hover:bg-[#FCD450] transition shadow-2xl disabled:opacity-20 uppercase">{isAiProcessing ? <Loader2 className="animate-spin" size={32}/> : <Wand2 size={32}/>}{aiModal.mode === 'bulk' ? 'BUILD FULL BOARD' : 'BUILD SECTION'}</button></div>
           </div>
         </div>
       )}
@@ -438,6 +436,15 @@ export default function LancerDashboard() {
                  </div>
                ))}
              </div>
+          </div>
+        </div>
+      )}
+
+      {isAssignPickerOpen && (
+        <div className="absolute inset-0 z-[130] flex items-center justify-center bg-black/90 p-6 text-white font-sans text-left">
+          <div className="bg-[#1a1a1a] border border-white/10 w-full max-w-md rounded-[3.5rem] p-10 shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center mb-8"><div className="flex items-center gap-3">{pickerStep === 'task' && <button onClick={() => setPickerStep('course')} className="p-2 bg-white/5 rounded-lg"><ArrowLeft size={20}/></button>}<h2 className="text-2xl font-black italic">{pickerStep === 'course' ? 'Select Class' : 'Pick Task'}</h2></div><button onClick={() => setIsAssignPickerOpen(false)}><X size={24} className="text-white/20 hover:text-white"/></button></div>
+            <div className="space-y-2 overflow-y-auto pr-2 custom-scrollbar">{isClassroomLoading ? <div className="py-12 flex justify-center"><Loader2 className="animate-spin text-white/40" /></div> : pickerStep === 'course' ? courses.map(c => (<button key={c.id} onClick={async () => { const token = sessionStorage.getItem('gc_token'); setIsClassroomLoading(true); const res = await fetch(`https://classroom.googleapis.com/v1/courses/${c.id}/courseWork`, { headers: { 'Authorization': `Bearer ${token}` } }); const d = await res.json(); setAssignmentList(d.courseWork || []); setPickerStep('task'); setIsClassroomLoading(false); }} className="w-full p-5 bg-white/5 hover:bg-blue-600/20 border border-white/5 rounded-2xl flex justify-between items-center text-sm font-black uppercase tracking-widest">{c.name} <ChevronRight size={18}/></button>)) : assignmentList.map(task => (<button key={task.id} onClick={() => { setAgenda({ ...agenda, [activeSection!]: { ...agenda[activeSection!], media: { type: 'assignment', url: task.alternateLink, title: task.title } } }); setIsAssignPickerOpen(false); setPickerStep('course'); }} className="w-full p-5 bg-white/5 hover:bg-emerald-600/20 border border-white/5 rounded-2xl text-left transition group"><div className="font-bold text-sm truncate group-hover:text-emerald-400">{task.title}</div></button>)) }</div>
           </div>
         </div>
       )}
