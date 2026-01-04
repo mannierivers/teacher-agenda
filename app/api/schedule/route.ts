@@ -8,57 +8,45 @@ export async function GET(req: Request) {
   const calendarId = process.env.NEXT_PUBLIC_GOOGLE_CALENDAR_ID;
   const apiKey = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 
-  if (!date || !calendarId || !apiKey) return NextResponse.json({ scheduleType: 'NONE' });
+  if (!date || !calendarId || !apiKey) return NextResponse.json({ scheduleType: 'NONE', events: [] });
 
   try {
-    // We fetch from 05:00:00 on the requested day to 05:00:00 the next day 
-    // This shift ensures we capture Arizona's full school day regardless of UTC offsets.
     const timeMin = `${date}T00:00:00Z`;
     const timeMax = `${date}T23:59:59Z`;
 
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?key=${apiKey}&timeMin=${timeMin}&timeMax=${timeMax}&singleEvents=true&orderBy=startTime`;
 
-    const response = await fetch(url, { 
-      cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' }
-    });
-    
+    const response = await fetch(url, { cache: 'no-store' });
     const data = await response.json();
-    const events = data.items || [];
+    const items = data.items || [];
 
     let detectedType = 'NONE';
+    const schoolEvents: string[] = [];
 
-    // LOGIC: Check events for keywords
-    for (const event of events) {
+    items.forEach((event: any) => {
       const title = (event.summary || "").toUpperCase();
       
-      // If ANY event says "No School" or "Break" or "Retreat", we default to NONE 
-      // UNLESS a specific Schedule is also found later.
-      if (title.includes('NO SCHOOL') || title.includes('BREAK') || title.includes('OFFICE CLOSED')) {
-        detectedType = 'NONE';
-      }
-
-      if (title.includes('SCHEDULE A') || title === 'A DAY') {
-        detectedType = 'A';
-        break; // Priority found
-      } 
-      if (title.includes('SCHEDULE B') || title === 'B DAY') {
+      // 1. Identify Schedule Type
+      if (title.includes('SCHEDULE A')) detectedType = 'A';
+      else if (title.includes('SCHEDULE B')) {
         detectedType = 'B';
         if (title.includes('ASSEMBLY')) detectedType = 'B-Assembly';
-        if (title.includes('EARLY')) detectedType = 'B-Early';
-        if (title.includes('LATE')) detectedType = 'B-Late';
-        break;
+        else if (title.includes('EARLY')) detectedType = 'B-Early';
+        else if (title.includes('LATE')) detectedType = 'B-Late';
+      } 
+      else if (title.includes('SCHEDULE C')) detectedType = 'C';
+      else if (title.includes('NO SCHOOL') || title.includes('BREAK')) detectedType = 'NONE';
+      
+      // 2. Identify Non-Schedule Events (Model UN, Catholic Schools Week, etc.)
+      // We exclude strings that are purely schedule labels
+      const isScheduleLabel = title.includes('SCHEDULE') || title === 'A' || title === 'B' || title === 'C';
+      if (!isScheduleLabel) {
+        schoolEvents.push(event.summary);
       }
-      if (title.includes('SCHEDULE C') || title === 'C DAY') {
-        detectedType = 'C';
-        break;
-      }
-      if (title.includes('LATE ARRIVAL')) detectedType = 'B-Late';
-      if (title.includes('ASSEMBLY')) detectedType = 'B-Assembly';
-    }
+    });
 
-    return NextResponse.json({ scheduleType: detectedType });
+    return NextResponse.json({ scheduleType: detectedType, schoolEvents });
   } catch (error) {
-    return NextResponse.json({ scheduleType: 'NONE' });
+    return NextResponse.json({ scheduleType: 'NONE', schoolEvents: [] });
   }
 }

@@ -5,6 +5,7 @@
 :root {
   --lancer-maroon: #8a2529;
   --lancer-gold: #FCD450;
+  color-scheme: dark; /* 👈 Tells Chromebox to use dark system UI */
 }
 
 html, body {
@@ -13,6 +14,12 @@ html, body {
   overflow: hidden;
   background-color: #000;
   -webkit-font-smoothing: antialiased;
+}
+
+/* CHROMEBOX DROPDOWN VISIBILITY FIX */
+select option {
+  background-color: #1a1a1a !important;
+  color: white !important;
 }
 
 .prose { color: white; }
